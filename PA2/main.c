@@ -91,9 +91,24 @@ void callVectorAdd2Kernel(Matrix* a, Matrix* b, Matrix* out, cl_context* context
     CHECK_ERR(err, "clCreateBuffer out");
 
     //@@ Copy memory to the GPU here
+    err = clEnqueueWriteBuffer(*queue, device_input_1, CL_TRUE, 0, a->shape[0] * a->shape[1] * sizeof(int), a->data, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueWriteBuffer a");
+    
+    err = clEnqueueWriteBuffer(*queue, device_input_2, CL_TRUE, 0, b->shape[0] * b->shape[1] * sizeof(int), b->data, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueWriteBuffer b");
 
     //@@ define local and global work sizes
-    unsigned int size_a = 0; // @@ replace this with length of the input vector(s)
+    
+    unsigned int size_a = a->shape[0];  // `a->shape[0]` is the number of rows, which is n
+
+    // Define the global and local work sizes
+    global_item_size = size_a;  // Each element in the matrix will be processed by one work item
+    local_item_size = 32;  // assuming device is weak    
+
+    // Check if global_item_size is divisible by local_item_size, else adjust
+    if (global_item_size % local_item_size != 0) {
+        global_item_size = (global_item_size / local_item_size + 1) * local_item_size;
+    }
 
     // Set the arguments to the kernel
     err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &device_input_1);
@@ -106,10 +121,17 @@ void callVectorAdd2Kernel(Matrix* a, Matrix* b, Matrix* out, cl_context* context
     CHECK_ERR(err, "clSetKernelArg 3");
 
     //@@ Launch the GPU Kernel here
+    err = clEnqueueNDRangeKernel(*queue, kernel, 1, NULL, &global_item_size, &local_item_size, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueNDRangeKernel");
 
     //@@ Copy the GPU memory back to the CPU here
+    err = clEnqueueReadBuffer(*queue, device_output, CL_TRUE, 0, out->shape[0] * out->shape[1] * sizeof(int), out->data, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueReadBuffer");
 
     //@@ Free the GPU memory here
+    clReleaseMemObject(device_input_1);
+    clReleaseMemObject(device_input_2);
+    clReleaseMemObject(device_output);
 
     // Release Host Memory
     free(kernel_source);
@@ -140,6 +162,9 @@ void part1(Matrix* host_input_1, Matrix* host_input_2, Matrix* host_input_3, Mat
     SaveMatrix(output_file, host_output);
 
     //@@ Release OpenCL objects here
+    clReleaseCommandQueue(queue);   // Release the command queue
+    clReleaseContext(context);       // Release the context
+    clReleaseDevice(device_id);      // Release the device
 }
 
 void callVectorAdd4Kernel(Matrix* a, Matrix* b, Matrix* c, Matrix* d, Matrix* out, cl_context* context, cl_command_queue* queue) {
@@ -206,9 +231,28 @@ void callVectorAdd4Kernel(Matrix* a, Matrix* b, Matrix* c, Matrix* d, Matrix* ou
     CHECK_ERR(err, "clCreateBuffer out");
 
     //@@ Copy memory to the GPU here
+    err = clEnqueueWriteBuffer(*queue, device_input_1, CL_TRUE, 0, a->shape[0] * a->shape[1] * sizeof(int), a->data, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueWriteBuffer a");
+    
+    err = clEnqueueWriteBuffer(*queue, device_input_2, CL_TRUE, 0, b->shape[0] * b->shape[1] * sizeof(int), b->data, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueWriteBuffer b");
+
+    err = clEnqueueWriteBuffer(*queue, device_input_3, CL_TRUE, 0, c->shape[0] * c->shape[1] * sizeof(int), c->data, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueWriteBuffer c");
+
+    err = clEnqueueWriteBuffer(*queue, device_input_4, CL_TRUE, 0, d->shape[0] * d->shape[1] * sizeof(int), d->data, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueWriteBuffer d");
 
     //@@ define local and global work sizes
-    unsigned int size_a = 0; // @@ replace this with length of the input vector(s)
+    
+    unsigned int size_a = a->shape[0];  
+    global_item_size = size_a;  
+    local_item_size = 32;  // assuming device is weak   
+
+    // Check if global_item_size is divisible by local_item_size, else adjust
+    if (global_item_size % local_item_size != 0) {
+        global_item_size = (global_item_size / local_item_size + 1) * local_item_size;
+    } 
 
     // Set the arguments to the kernel
     err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &device_input_1);
@@ -225,10 +269,19 @@ void callVectorAdd4Kernel(Matrix* a, Matrix* b, Matrix* c, Matrix* d, Matrix* ou
     CHECK_ERR(err, "clSetKernelArg 5");
 
     //@@ Launch the GPU Kernel here
+    err = clEnqueueNDRangeKernel(*queue, kernel, 1, NULL, &global_item_size, &local_item_size, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueNDRangeKernel");
 
     //@@ Copy the GPU memory back to the CPU here
+    err = clEnqueueReadBuffer(*queue, device_output, CL_TRUE, 0, out->shape[0] * out->shape[1] * sizeof(int), out->data, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueReadBuffer");
 
     //@@ Free the GPU memory here
+    clReleaseMemObject(device_input_1);
+    clReleaseMemObject(device_input_2);
+    clReleaseMemObject(device_input_3);
+    clReleaseMemObject(device_input_4);
+    clReleaseMemObject(device_output);
 
     // Release Host Memory
     free(kernel_source);
@@ -257,6 +310,9 @@ void part2(Matrix* host_input_1, Matrix* host_input_2, Matrix* host_input_3, Mat
     SaveMatrix(output_file, host_output);
 
     //@@ Release OpenCL objects here
+    clReleaseCommandQueue(queue);   // Release the command queue
+    clReleaseContext(context);       // Release the context
+    clReleaseDevice(device_id);      // Release the device
 }
 
 int main(int argc, char *argv[])
