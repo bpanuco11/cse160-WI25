@@ -19,6 +19,9 @@ OBJECTS = $(SOURCES:.c=.o)
 .SUFFIXES: .o .c
 all: helper_lib.a
 
+debug: CFLAGS += -DOCL_DEVICE_TYPE=CL_DEVICE_TYPE_CPU
+debug: helper_lib.a
+
 .c.o:
 	$(CC) $(CFLAGS) -c -o $@ $^ $(INCFLAGS) $(LDFLAGS)
 

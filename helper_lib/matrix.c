@@ -69,7 +69,7 @@ cl_int CheckMatrix(Matrix *truth, Matrix *student)
 {
     if (truth->shape[0] != student->shape[0] || truth->shape[1] != student->shape[1])
     {
-        printf("!!SOLUTION IS NOT CORRECT!!\n");
+        printf("!!INCORRECT SHAPE!!\n");
         return CL_INVALID_VALUE;
     }
 

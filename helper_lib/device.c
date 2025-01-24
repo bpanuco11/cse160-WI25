@@ -2,6 +2,7 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdio.h>
 
 #include <stdlib.h>
 
@@ -88,6 +89,39 @@ const char *OclDeviceTypeString(cl_device_type type)
     default:
         return "Default";
     }
+}
+
+cl_int OclGetDeviceWithFallback(cl_device_id* device_id, cl_device_type device_type) {
+    OclPlatformProp *platforms = NULL;
+    cl_int err;
+
+    cl_uint num_platforms;
+    err = OclFindPlatforms((const OclPlatformProp **)&platforms, &num_platforms);
+
+    if (err != CL_SUCCESS)
+    {
+        return err;
+    }
+
+    if (num_platforms == 0) {
+        return CL_DEVICE_NOT_FOUND;
+    }
+
+    for (int i = 0; i < num_platforms; i++) {
+        for (int j = 0; j < platforms[i].num_devices; j++) {
+            if (*platforms[i].devices[j].type == device_type) {
+                *device_id = platforms[i].devices[j].device_id;
+
+                return CL_SUCCESS;
+            }
+        }
+    }
+
+    printf("\033[33mCould not find a %s. Defaulting to first available device...\033[0m\n", OclDeviceTypeString(device_type));
+
+    // If we got here, there is not a device which matches the requested device type.  Just return the first device.
+    *device_id = platforms[0].devices[0].device_id;;
+    return CL_SUCCESS;
 }
 
 cl_int OclFindDevices(const cl_platform_id platform_id, const OclDeviceProp **devices,
