@@ -16,6 +16,14 @@
 
 void OpenCLMatrixMultiply(Matrix *input0, Matrix *input1, Matrix *result)
 {
+    // Ensure output shape is correct for A^T * B
+    if (result->shape[0] != input0->shape[1] || result->shape[1] != input1->shape[1]) {
+        fprintf(stderr, "Error: Output matrix dimensions do not match A^T * B.\n");
+        fprintf(stderr, "Expected (%d, %d), but got (%d, %d)\n",
+                input0->shape[1], input1->shape[1], result->shape[0], result->shape[1]);
+        return;
+    }
+
     // Load external OpenCL kernel code
     char *kernel_source = OclLoadKernel(KERNEL_PATH); // Load kernel source
 
@@ -65,10 +73,50 @@ void OpenCLMatrixMultiply(Matrix *input0, Matrix *input1, Matrix *result)
     CHECK_ERR(err, "clCreateKernel");
 
     //@@ Allocate GPU memory here
+    device_a = clCreateBuffer(context,
+                            CL_MEM_READ_ONLY,
+                            input0->shape[0] * input0->shape[1] * sizeof(int),
+                            NULL,
+                            &err);
+    CHECK_ERR(err, "clCreateBuffer input0");
+
+    device_b = clCreateBuffer(context,
+                            CL_MEM_READ_ONLY,
+                            input1->shape[0] * input1->shape[1] * sizeof(int),
+                            NULL,
+                            &err);
+    CHECK_ERR(err, "clCreateBuffer input1");
+
+    device_c = clCreateBuffer(context,
+                            CL_MEM_WRITE_ONLY,
+                            result->shape[0] * result->shape[1] * sizeof(int),
+                            NULL,
+                            &err);
+    CHECK_ERR(err, "clCreateBuffer result");
+
 
     //@@ Copy memory to the GPU here
+    err = clEnqueueWriteBuffer(queue, device_a, CL_TRUE, 0, input0->shape[0] * input0->shape[1] * sizeof(int), input0->data, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueWriteBuffer input0");
+
+    err = clEnqueueWriteBuffer(queue, device_b, CL_TRUE, 0, input1->shape[0] * input1->shape[1] * sizeof(int), input1->data, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueWriteBuffer input1");
+
 
     //@@ define local and global work sizes
+    // Define global and local work sizes
+
+    
+    size_t global_item_size[2] = {
+    (result->shape[0] + 15) / 16 * 16,  // Round up to the nearest multiple of 16
+    (result->shape[1] + 15) / 16 * 16
+    };
+    size_t local_item_size[2] = {16, 16}; // Based on GPU tuning
+
+
+    
+
+
 
     // Set the arguments to our compute kernel
     // __global const int *A, __global const int *B, __global int *C,
@@ -95,11 +143,28 @@ void OpenCLMatrixMultiply(Matrix *input0, Matrix *input1, Matrix *result)
     CHECK_ERR(err, "clSetKernelArg 8");
 
     //@@ Launch the GPU Kernel here
+    err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_item_size, local_item_size, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueNDRangeKernel");
+
 
     //@@ Copy the GPU memory back to the CPU here
+    err = clEnqueueReadBuffer(queue, device_c, CL_TRUE, 0, result->shape[0] * result->shape[1] * sizeof(int), result->data, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueReadBuffer");
+
 
     //@@ Free the GPU memory here
+    clReleaseMemObject(device_a);
+    clReleaseMemObject(device_b);
+    clReleaseMemObject(device_c);
 
+    // may need adjusting
+    clReleaseKernel(kernel);
+    clReleaseProgram(program);
+    clReleaseCommandQueue(queue);
+    clReleaseContext(context);
+
+    // Release Host Memory
+    free(kernel_source);
 }
 
 int main(int argc, char *argv[])
@@ -132,6 +197,10 @@ int main(int argc, char *argv[])
     int rows, cols;
     //@@ Update these values for the output rows and cols of the output
     //@@ Do not use the results from the answer matrix
+    rows = host_a.shape[1];  // Transpose of A changes row count
+    cols = host_b.shape[1];
+
+
 
     // Allocate the memory for the target.
     host_c.shape[0] = rows;
@@ -158,3 +227,18 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+
+/* 
+    // Get row and column index for the output matrix
+    int row = get_global_id(0);
+    int col = get_global_id(1);
+
+    // Ensure we are within bounds
+    if (row < numCRows && col < numCColumns) {
+        int sum = 0;
+        for (int k = 0; k < numARows; k++) {
+            sum += A[k * numAColumns + row] * B[k * numBColumns + col];
+        }
+        C[row * numCColumns + col] = sum;
+    }
+  }*/
