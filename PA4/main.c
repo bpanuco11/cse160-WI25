@@ -62,40 +62,73 @@ void OpenCLMatrixMultiply(Matrix *input0, Matrix *input1, Matrix *result)
     CHECK_ERR(err, "clCreateKernel");
 
     //@@ Allocate GPU memory here
+    device_a = clCreateBuffer(context,
+                            CL_MEM_READ_ONLY,
+                            input0->shape[0] * input0->shape[1] * sizeof(int),
+                            NULL,
+                            &err);
+    CHECK_ERR(err, "clCreateBuffer input0");
+
+    device_b = clCreateBuffer(context,
+                            CL_MEM_READ_ONLY,
+                            input1->shape[0] * input1->shape[1] * sizeof(int),
+                            NULL,
+                            &err);
+    CHECK_ERR(err, "clCreateBuffer input1");
+
+    device_c = clCreateBuffer(context,
+                            CL_MEM_WRITE_ONLY,
+                            result->shape[0] * result->shape[1] * sizeof(int),
+                            NULL,
+                            &err);
+    CHECK_ERR(err, "clCreateBuffer result");
+
 
     //@@ Copy memory to the GPU here
+    err = clEnqueueWriteBuffer(queue, device_a, CL_TRUE, 0, input0->shape[0] * input0->shape[1] * sizeof(int), input0->data, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueWriteBuffer input0");
 
-    // Set the arguments to our compute kernel
-    // __global const int *A, __global const int *B, __global int *C,
-    // const unsigned int numARows, const unsigned int numAColumns,
-    // const unsigned int numBRows, const unsigned int numBColumns,
-    // const unsigned int numCRows, const unsigned int numCColumns
-    err = clSetKernelArg(kernel, 0, sizeof(cl_mem), &device_a);
-    CHECK_ERR(err, "clSetKernelArg 0");
+    err = clEnqueueWriteBuffer(queue, device_b, CL_TRUE, 0, input1->shape[0] * input1->shape[1] * sizeof(int), input1->data, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueWriteBuffer input1");
+
+    // Set kernel arguments
+    err  = clSetKernelArg(kernel, 0, sizeof(cl_mem), &device_a);
     err |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &device_b);
-    CHECK_ERR(err, "clSetKernelArg 1");
     err |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &device_c);
-    CHECK_ERR(err, "clSetKernelArg 2");
-    err |= clSetKernelArg(kernel, 3, sizeof(unsigned int), &input0->shape[0]);
-    CHECK_ERR(err, "clSetKernelArg 3");
-    err |= clSetKernelArg(kernel, 4, sizeof(unsigned int), &input0->shape[1]);
-    CHECK_ERR(err, "clSetKernelArg 4");
-    err |= clSetKernelArg(kernel, 5, sizeof(unsigned int), &input1->shape[0]);
-    CHECK_ERR(err, "clSetKernelArg 5");
-    err |= clSetKernelArg(kernel, 6, sizeof(unsigned int), &input1->shape[1]);
-    CHECK_ERR(err, "clSetKernelArg 6");
-    err |= clSetKernelArg(kernel, 7, sizeof(unsigned int), &result->shape[0]);
-    CHECK_ERR(err, "clSetKernelArg 7");
-    err |= clSetKernelArg(kernel, 8, sizeof(unsigned int), &result->shape[1]);
-    CHECK_ERR(err, "clSetKernelArg 8");
+    err |= clSetKernelArg(kernel, 3, sizeof(unsigned int), &input0->shape[0]); // numARows
+    err |= clSetKernelArg(kernel, 4, sizeof(unsigned int), &input0->shape[1]); // numAColumns
+    err |= clSetKernelArg(kernel, 5, sizeof(unsigned int), &input1->shape[0]); // numBRows
+    err |= clSetKernelArg(kernel, 6, sizeof(unsigned int), &input1->shape[1]); // numBColumns
+    CHECK_ERR(err, "clSetKernelArg");
 
     // @@ define local and global work sizes
+    size_t global_item_size[2] = {
+    (result->shape[0] + 15) / 16 * 16,  // Round up to the nearest multiple of 16
+    (result->shape[1] + 15) / 16 * 16
+    };
+    size_t local_item_size[2] = {16, 16}; // Based on GPU tuning
 
     //@@ Launch the GPU Kernel here
+    err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_item_size, local_item_size, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueNDRangeKernel");
 
     //@@ Copy the GPU memory back to the CPU here
+    err = clEnqueueReadBuffer(queue, device_c, CL_TRUE, 0, result->shape[0] * result->shape[1] * sizeof(int), result->data, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueReadBuffer");
 
     //@@ Free the GPU memory here
+    clReleaseMemObject(device_a);
+    clReleaseMemObject(device_b);
+    clReleaseMemObject(device_c);
+
+    // may need adjusting
+    clReleaseKernel(kernel);
+    clReleaseProgram(program);
+    clReleaseCommandQueue(queue);
+    clReleaseContext(context);
+
+    // Release Host Memory
+    free(kernel_source);
 }
 
 int main(int argc, char *argv[])
@@ -128,6 +161,8 @@ int main(int argc, char *argv[])
     int rows, cols;
     //@@ Update these values for the output rows and cols of the output
     //@@ Do not use the results from the answer matrix
+    rows = host_a.shape[0];  // we do not use A^T this time!
+    cols = host_b.shape[1];
 
     // Allocate the memory for the target.
     host_c.shape[0] = rows;
