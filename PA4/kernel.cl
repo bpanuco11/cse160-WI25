@@ -3,50 +3,50 @@ __kernel void matrixMultiply(
     const unsigned int numARows, const unsigned int numAColumns,
     const unsigned int numBRows, const unsigned int numBColumns) {
     
-    // Define tile size
+    // block size for each tile.
     const int TILE_SIZE = 16;
     
-    // Local memory for tiles
-    __local int Asub[TILE_SIZE][TILE_SIZE];
-    __local int Bsub[TILE_SIZE][TILE_SIZE];
+    // Local memory for tiles of matrices A and B
+    __local int A_Tile[TILE_SIZE][TILE_SIZE];  
+    __local int B_Tile[TILE_SIZE][TILE_SIZE];  
     
-    // Global row and column indices
-    int row = get_global_id(0);
-    int col = get_global_id(1);
+    int row = get_global_id(0);  // Global row index for matrix C
+    int col = get_global_id(1);  // Global column index for matrix C
     
-    // Local row and column indices within the block
-    int localRow = get_local_id(0);
-    int localCol = get_local_id(1);
+    int localRow = get_local_id(0);  // Local row index within tile
+    int localCol = get_local_id(1);  // Local column index within tile
     
-    int sum = 0;
+    int sum = 0;  // Variable sum to accumulate result for C[row][col]
     
-    // Iterate over tiles
+    // Iterate over tiles to perform matrix multiplication
     for (int t = 0; t < (numAColumns + TILE_SIZE - 1) / TILE_SIZE; t++) {
         
-        // Load tiles into shared memory
+        // Load data into local memory (tiles of A and B)
+        // only load data if within bounds!
         if (row < numARows && t * TILE_SIZE + localCol < numAColumns)
-            Asub[localRow][localCol] = A[row * numAColumns + t * TILE_SIZE + localCol];
+            A_Tile[localRow][localCol] = A[row * numAColumns + t * TILE_SIZE + localCol];
         else
-            Asub[localRow][localCol] = 0;
+            A_Tile[localRow][localCol] = 0;  // Pad with zero if out of bounds
 
         if (col < numBColumns && t * TILE_SIZE + localRow < numBRows)
-            Bsub[localRow][localCol] = B[(t * TILE_SIZE + localRow) * numBColumns + col];
+            B_Tile[localRow][localCol] = B[(t * TILE_SIZE + localRow) * numBColumns + col];
         else
-            Bsub[localRow][localCol] = 0;
+            B_Tile[localRow][localCol] = 0;  // Pad with zero if out of bounds
         
-        // Synchronize to ensure tiles are loaded
+        // Synchronize threads to make sure all data is loaded into local memory
         barrier(CLK_LOCAL_MEM_FENCE);
         
-        // Compute partial sum for the tile
+        // Compute partial sum for this tile multiplication
         for (int k = 0; k < TILE_SIZE; k++) {
-            sum += Asub[localRow][k] * Bsub[k][localCol];
+            sum += A_Tile[localRow][k] * B_Tile[k][localCol];
         }
         
-        // Synchronize before next tile load
+        /* Synchronize threads again to ensure all threads finish computing
+          their partial sums before proceeding to the next tile load*/
         barrier(CLK_LOCAL_MEM_FENCE);
     }
     
-    // Store the result
+    // Store the result into matrix C
     if (row < numARows && col < numBColumns) {
         C[row * numBColumns + col] = sum;
     }
