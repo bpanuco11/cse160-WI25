@@ -175,7 +175,6 @@ int main(int argc, char *argv[])
     // // Call to print the matrix
     // PrintMatrix(&host_c);
 
-    // Save the matrix
     SaveMatrix(input_file_d, &host_c);
 
     // Check the result of the matrix multiply
