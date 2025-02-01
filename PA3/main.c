@@ -45,8 +45,9 @@ void OpenCLMatrixMultiply(Matrix *input0, Matrix *input1, Matrix *result)
     err = OclFindPlatforms((const OclPlatformProp **)&platforms, &num_platforms);
     CHECK_ERR(err, "OclFindPlatforms");
 
-    // Get ID for first device on first platform
-    device_id = platforms[0].devices[0].device_id;
+    // Get the ID for the specified kind of device type.
+    err = OclGetDeviceWithFallback(&device_id, OCL_DEVICE_TYPE);
+    CHECK_ERR(err, "OclGetDeviceWithFallback");
 
     // Create a context
     context = clCreateContext(0, 1, &device_id, NULL, NULL, &err);

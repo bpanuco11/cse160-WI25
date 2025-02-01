@@ -78,7 +78,7 @@ cl_int CheckMatrix(Matrix *truth, Matrix *student)
     {
         //float epsilon = fabs(truth->data[i]) * 0.1f;
         int diff = truth->data[i] - student->data[i];
-        if (diff > 0)
+        if (diff != 0)
         {
             printf("!!SOLUTION IS NOT CORRECT!!\n");
             return CL_INVALID_VALUE;

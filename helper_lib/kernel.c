@@ -24,8 +24,8 @@ char *OclLoadKernel(const char *path)
     if (!kernel_size) // Not enough host memory
         return NULL;
 
-    fread(kernel_source, 1, kernel_size, kernel_file);
-    kernel_source[kernel_size - 1] = '\0'; // Add null terminator
+    size_t kernel_count = fread(kernel_source, 1, kernel_size, kernel_file);
+    kernel_source[kernel_count] = '\0'; // Add null terminator
 
     fclose(kernel_file);
     return kernel_source;

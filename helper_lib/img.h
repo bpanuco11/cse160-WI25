@@ -12,5 +12,7 @@
 #define IMAGE_CHANNELS 3
 
 cl_int LoadImg(const char *path, Matrix* img);
+cl_int LoadStride(const char *dir, int *stride);
+cl_int LoadImgRaw(const char *path, Image* img);
 cl_int SaveImg(const char *path, Matrix *matrix);
 cl_int CheckImg(Matrix *truth, Matrix *student);
