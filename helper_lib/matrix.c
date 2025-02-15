@@ -99,7 +99,7 @@ void PrintMatrix(Matrix *matrix)
     {
         for (int c = 0; c < cols; c++)
         {
-            printf("%df ", matrix->data[r * cols + c]);
+            printf("%d ", matrix->data[r * cols + c]);
         }
         printf("\n");
     }
