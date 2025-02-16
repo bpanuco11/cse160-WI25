@@ -1,31 +1,57 @@
-
+// OpenCL kernel function for performing 2D convolution with a given mask (kernel).
+// This kernel assumes the input image has multiple channels (e.g., RGB) and applies
+// the convolution operation independently to each channel.
 __kernel void convolution2D(
-    __global int * inputData, __global int * outputData, __constant int * maskData,
-    int width, int height, int maskWidth,  int imageChannels, int stride){
-    //@@ Insert code to implement matrix multiplication here
-   
-    /**
-    maskWidth := 5
-    maskRadius := maskWidth/2 # this is integer division, so the result is 2
-    for i from 0 to height do
-        for j from 0 to width do
-            for k from 0 to channels
-                accum := 0
-                for y from -maskRadius to maskRadius do
-                    for x from -maskRadius to maskRadius do
-                        xOffset := j + x
-                        yOffset := i + y
-                        if xOffset >= 0 && xOffset < width &&
-                            yOffset >= 0 && yOffset < height then
-                            imagePixel := I[(yOffset * width + xOffset) * channels + k]
-                            maskValue := K[(y+maskRadius)*maskWidth+x+maskRadius]
-                            accum += imagePixel * maskValue
-                        end
-                    end
-                end
-                # pixels are in the range of 0 to 1
-                P[(i * width + j)*channels + k] = clamp(accum, 0, 1)
-            end
-        end
-    end**/
+    __global int *inputData,   // Pointer to the input image data (flattened array)
+    __global int *outputData,  // Pointer to the output image data (flattened array)
+    __constant int *maskData,  // Pointer to the convolution mask (kernel), stored in constant memory
+    int width,                 // Width of the input image
+    int height,                // Height of the input image
+    int maskWidth,             // Width (and height) of the square convolution mask
+    int imageChannels,         // Number of color channels in the image (e.g., 3 for RGB)
+    int stride                // Stride: step size for sliding the mask over the image
+) {
+    // Get global indices for the output data
+    int x = get_global_id(0); // X-coordinate of the output pixel
+    int y = get_global_id(1); // Y-coordinate of the output pixel
+    int c = get_global_id(2); // Channel index (R, G, or B)
+
+    // Compute the mask's radius (assumes square mask)
+    int maskRadius = maskWidth / 2;
+
+    // Compute the width and height of the output image after applying the convolution
+    int output_width = (width - maskWidth) / stride + 1;
+    int output_height = (height - maskWidth) / stride + 1;
+
+    // Ensure thread is within valid bounds
+    if (x >= output_width || y >= output_height || c >= imageChannels) {
+        return;  // If the thread is out of bounds, exit early
+    }
+
+    // Accumulator variable to store the convolution result for this pixel and channel
+    int accum = 0;
+
+    // Perform the convolution operation by iterating over the mask elements
+    for (int j = 0; j < maskWidth; j++) {  // Loop over the mask rows
+        for (int i = 0; i < maskWidth; i++) {  // Loop over the mask columns
+            // Compute the corresponding input image coordinates
+            int xOffset = x * stride + i;
+            int yOffset = y * stride + j;
+
+            // Ensure that the computed input coordinates are within image bounds
+            if (xOffset < width && yOffset < height) {
+                // Compute the index in the flattened input array
+                int imageIndex = (yOffset * width + xOffset) * imageChannels + c;
+                // Compute the index in the flattened mask array
+                int maskIndex = j * maskWidth + i;
+
+                // Perform element-wise multiplication and accumulate the result
+                accum += inputData[imageIndex] * maskData[maskIndex];
+            }
+        }
+    }
+
+    // Compute the index for storing the result in the output array
+    int outputIndex = (y * output_width + x) * imageChannels + c;
+    outputData[outputIndex] = accum; // Store the computed convolution value in the output array
 }
