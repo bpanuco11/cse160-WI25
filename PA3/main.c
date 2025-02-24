@@ -103,22 +103,6 @@ void OpenCLMatrixMultiply(Matrix *input0, Matrix *input1, Matrix *result)
     err = clEnqueueWriteBuffer(queue, device_b, CL_TRUE, 0, input1->shape[0] * input1->shape[1] * sizeof(int), input1->data, 0, NULL, NULL);
     CHECK_ERR(err, "clEnqueueWriteBuffer input1");
 
-
-    //@@ define local and global work sizes
-    // Define global and local work sizes
-
-    
-    size_t global_item_size[2] = {
-    (result->shape[0] + 15) / 16 * 16,  // Round up to the nearest multiple of 16
-    (result->shape[1] + 15) / 16 * 16
-    };
-    size_t local_item_size[2] = {16, 16}; // Based on GPU tuning
-
-
-    
-
-
-
     // Set the arguments to our compute kernel
     // __global const int *A, __global const int *B, __global int *C,
     // const unsigned int numARows, const unsigned int numAColumns,
@@ -142,6 +126,16 @@ void OpenCLMatrixMultiply(Matrix *input0, Matrix *input1, Matrix *result)
     CHECK_ERR(err, "clSetKernelArg 7");
     err |= clSetKernelArg(kernel, 8, sizeof(unsigned int), &result->shape[1]);
     CHECK_ERR(err, "clSetKernelArg 8");
+
+
+    //@@ define local and global work sizes
+    // Define global and local work sizes
+    size_t global_item_size[2] = {
+    (result->shape[0] + 15) / 16 * 16,  // Round up to the nearest multiple of 16
+    (result->shape[1] + 15) / 16 * 16
+    };
+    size_t local_item_size[2] = {16, 16}; // Based on GPU tuning
+
 
     //@@ Launch the GPU Kernel here
     err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_item_size, local_item_size, 0, NULL, NULL);

@@ -41,8 +41,8 @@ __kernel void matrixMultiply(
             sum += A_Tile[localRow][k] * B_Tile[k][localCol];
         }
         
-        /* Synchronize threads again to ensure all threads finish computing
-          their partial sums before proceeding to the next tile load*/
+        //Synchronize threads again to ensure all threads finish computing
+        // their partial sums before proceeding to the next tile load
         barrier(CLK_LOCAL_MEM_FENCE);
     }
     
@@ -51,3 +51,61 @@ __kernel void matrixMultiply(
         C[row * numBColumns + col] = sum;
     }
 }
+
+
+/*
+
+__kernel void matrixMultiply(
+    __global const int *A, __global const int *B, __global int *C,
+    const unsigned int numARows, const unsigned int numAColumns,
+    const unsigned int numBRows, const unsigned int numBColumns) {
+    
+    // Define the tile size; this could be adjusted based on hardware
+    const int TILE_SIZE = 16
+
+    // Local memory for tiles of A and B
+    __local int A_Tile[TILE_SIZE][TILE_SIZE];  
+    __local int B_Tile[TILE_SIZE][TILE_SIZE];  
+    
+    // Global indices for the output matrix C
+    int row = get_global_id(0);
+    int col = get_global_id(1);
+    
+    // Local indices within the tile
+    int localRow = get_local_id(0);
+    int localCol = get_local_id(1);
+    
+    int sum = 0;  // Variable to accumulate the result
+
+    // Iterate over the tiles
+    for (int t = 0; t < (numAColumns + TILE_SIZE - 1) / TILE_SIZE; t++) {
+
+        // Load data into local memory
+        if (row < numARows && t * TILE_SIZE + localCol < numAColumns)
+            A_Tile[localRow][localCol] = A[row * numAColumns + t * TILE_SIZE + localCol];
+        else
+            A_Tile[localRow][localCol] = 0;
+
+        if (col < numBColumns && t * TILE_SIZE + localRow < numBRows)
+            B_Tile[localRow][localCol] = B[(t * TILE_SIZE + localRow) * numBColumns + col];
+        else
+            B_Tile[localRow][localCol] = 0;
+
+        // Synchronize threads to ensure all data is loaded into local memory
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+        // Compute partial sum for this tile multiplication
+        for (int k = 0; k < TILE_SIZE; k++) {
+            sum += A_Tile[localRow][k] * B_Tile[k][localCol];
+        }
+
+        // Synchronize threads again to ensure all threads finish computing
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+
+    // Store the result into matrix C
+    if (row < numARows && col < numBColumns) {
+        C[row * numBColumns + col] = sum;
+    }
+}
+*/
