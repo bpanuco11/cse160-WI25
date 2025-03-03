@@ -47,7 +47,21 @@ void OpenCL::setup(cl_device_type device_type)
 
     // Build the program executable
     err = clBuildProgram(program, 0, nullptr, nullptr, nullptr, nullptr);
-    CHECK_ERR(err, "clBuildProgram");
+    if (err != CL_SUCCESS) {
+        // Get the build log if there is a failure
+        size_t log_size;
+        clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, 0, nullptr, &log_size);
+        char *log = (char *)malloc(log_size);
+        clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, log_size, log, nullptr);
+        fprintf(stderr, "Error in OpenCL program build:\n%s\n", log);
+        free(log);
+        exit(EXIT_FAILURE);
+    }
+
+    /*
+    // Build the program executable
+    err = clBuildProgram(program, 0, nullptr, nullptr, nullptr, nullptr);
+    CHECK_ERR(err, "clBuildProgram");*/
 
     // Create the compute kernel in the program we wish to run
     kernel = clCreateKernel(program, "conv_forward_kernel", &err);

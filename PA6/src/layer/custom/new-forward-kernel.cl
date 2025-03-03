@@ -1,6 +1,11 @@
 #define TILE_WIDTH 16
 #define KERNEL_SZ 7
 
+// Maximum kernel size, assuming K = 7 is the max expected kernel size
+#define MAX_KERNEL_SIZE 7
+#define MAX_TILE_WIDTH 16
+
+
 __kernel void do_not_remove_this_kernel() {
     int tx = get_local_id(0);
     tx = tx + 1;
@@ -11,17 +16,48 @@ __kernel void prefn_marker_kernel() {
     tx = tx + 1;
 }
 
+__kernel void conv_forward_kernel(
+    __global float* y,       // Output tensor
+    __global float* x,       // Input tensor
+    __constant float* k,     // Kernel weights (constant memory for efficiency)
+    int B,                   // Batch size
+    int M,                   // Number of output feature maps
+    int C,                   // Number of input channels
+    int H,                   // Input height
+    int W,                   // Input width
+    int K                    // Kernel size (assumed square: KxK)
+) {
+    // Compute output dimensions
+    int H_out = H - K + 1;
+    int W_out = W - K + 1;
+    
+    // Get global indices for the output tensor
+    int col_out = get_global_id(0);  // Output pixel X
+    int row_out = get_global_id(1);  // Output pixel Y
+    int m = get_global_id(2);  // Feature map index
+    
+    // Ensure the thread is within valid bounds
+    if (col_out >= W_out || row_out >= H_out || m >= M) return;
+    
+    // Iterate over batch size
+    for (int b = 0; b < B; ++b) {
+        float accum = 0.0f;
 
-
-__kernel void conv_forward_kernel(__global float *y, __constant float *x, __constant float *k, const int B, const int M, const int C, const int H, const int W, const int K)
-{
-#define y4d(i3, i2, i1, i0) y[(i3) * (M * H_out * W_out) + (i2) * (H_out * W_out) + (i1) * (W_out) + i0]
-#define x4d(i3, i2, i1, i0) x[(i3) * (C * H * W) + (i2) * (H * W) + (i1) * (W) + i0]
-#define k4d(i3, i2, i1, i0) k[(i3) * (C * K * K) + (i2) * (K * K) + (i1) * (K) + i0]
-
-	//@@ Insert code to implement convolution here
-
-#undef y4d
-#undef x4d
-#undef k4d
+        for (int c = 0; c < C; ++c) {  // Loop over input channels
+            for (int p = 0; p < K; ++p) {  // Loop over kernel rows
+                for (int q = 0; q < K; ++q) {  // Loop over kernel columns
+                    // Compute input image index
+                    int img_idx = (b * C * H * W) + (c * H * W) + ((row_out + p) * W) + (col_out + q);
+                    // Compute kernel index
+                    int k_idx = (m * C * K * K) + (c * K * K) + (p * K) + q;
+                    // Perform element-wise multiplication and accumulation
+                    accum += x[img_idx] * k[k_idx];
+                }
+            }
+        }
+        // Compute output index
+        int out_idx = (b * M * H_out * W_out) + (m * H_out * W_out) + (row_out * W_out) + col_out;
+        // Store result in output tensor
+        y[out_idx] = accum;
+    }
 }
