@@ -16,60 +16,6 @@
         exit(EXIT_FAILURE);                           \
     }
 
-
-/*
-void OpenCLInterface::conv_forward_opencl_prolog(const float *host_y, const float *host_x, const float *host_k, cl_mem *device_y, cl_mem *device_x, cl_mem *device_k, const int B, const int M, const int C, const int H, const int W, const int K)
-{
-
-    //@@ Allocate OpenCL memory here
-    // Create memory buffers for input and output vectors
-    // 
-    // Do not create your own device/context/queue. 
-    // Use this->opencl->[program, kernel, queue, context]
-    // OpenCL (common for entire NN)
-    //      class is defined here: https://github.com/KastnerRG/cse160-WI25/blob/main/PA6/src/layer/custom/opencl.h
-    //      methods defined here: https://github.com/KastnerRG/cse160-WI25/blob/main/PA6%2Fsrc%2Flayer%2Fcustom%opencl.cc
-    //      created and passed into the network here: https://github.com/KastnerRG/cse160-WI25/blob/main/PA6/m2.cc
-    //      it's pointer is kept in OpenCLInterface (THIS) class here: https://github.com/KastnerRG/cse160-WI25/blob/main/PA6/src/layer/custom/opencl-new-forward.h
-
-    //@@ Copy memory to the OpenCL here
-    // Copy input vectors to memory buffers
-}
-
-
-void OpenCLInterface::conv_forward_opencl(cl_mem device_y, const cl_mem device_x, const cl_mem device_k, const int B, const int M, const int C, const int H, const int W, const int K)
-{
-
-    //__global float *y, __constant float *x, __constant float *k,
-    // const int B, const int M, const int C, const int H, const int W, const int K)
-    // Set the arguments to our compute kernel
-    //
-    // Do not create your own device/context/queue.
-    // Use this->opencl->[program, kernel, queue, context]
-
-    //@@ Set the kernel dimensions and call the kernel
-
-    //@@ Launch the OpenCL Kernel here
-    // Execute the OpenCL kernel on the array
-}
-
-
-void OpenCLInterface::conv_forward_opencl_epilog(float *host_y, cl_mem device_y, cl_mem device_x, cl_mem device_k, const int B, const int M, const int C, const int H, const int W, const int K)
-{
-
-    //@@ Copy the output back to host
-
-    // Read the memory buffer output_mem_obj to the local variable result
-    //
-    // Do not create your own device/context/queue.
-    // Use this->opencl->[program, kernel, queue, context]
-
-    //@@ Free the OpenCL memory here
-    // Release OpenCL resources
-}
-*/
-
-
 void OpenCLInterface::conv_forward_opencl_prolog(const float *host_y, const float *host_x, const float *host_k, 
     cl_mem *device_y, cl_mem *device_x, cl_mem *device_k, 
     const int B, const int M, const int C, const int H, const int W, const int K) 
@@ -84,38 +30,48 @@ void OpenCLInterface::conv_forward_opencl_prolog(const float *host_y, const floa
     clEnqueueWriteBuffer(this->opencl->queue, *device_k, CL_TRUE, 0, M * C * K * K * sizeof(float), host_k, 0, NULL, NULL);
 }
 
-
-void OpenCLInterface::conv_forward_opencl(cl_mem device_y, const cl_mem device_x, const cl_mem device_k, 
-    const int B, const int M, const int C, const int H, const int W, const int K) 
+void OpenCLInterface::conv_forward_opencl(cl_mem device_y, const cl_mem device_x, const cl_mem device_k, const int B, const int M, const int C, const int H, const int W, const int K)
 {
+    cl_int err;
+
+    int output_height = H - K + 1;
+    int output_width = W - K + 1;
+    size_t num_tile_groups_width = (output_width + TILE_WIDTH - 1) / TILE_WIDTH;
+    size_t num_tile_groups_height = (output_height + TILE_WIDTH - 1) / TILE_WIDTH;
+    size_t global_item_size[3] = {(size_t)M * TILE_WIDTH, num_tile_groups_width * num_tile_groups_height * TILE_WIDTH, (size_t)B};
+    size_t local_item_size[3] = {TILE_WIDTH, TILE_WIDTH, 1};
+
     // Set kernel arguments
-    clSetKernelArg(this->opencl->kernel, 0, sizeof(cl_mem), &device_y);
-    clSetKernelArg(this->opencl->kernel, 1, sizeof(cl_mem), &device_x);
-    clSetKernelArg(this->opencl->kernel, 2, sizeof(cl_mem), &device_k);
-    clSetKernelArg(this->opencl->kernel, 3, sizeof(int), &B);
-    clSetKernelArg(this->opencl->kernel, 4, sizeof(int), &M);
-    clSetKernelArg(this->opencl->kernel, 5, sizeof(int), &C);
-    clSetKernelArg(this->opencl->kernel, 6, sizeof(int), &H);
-    clSetKernelArg(this->opencl->kernel, 7, sizeof(int), &W);
-    clSetKernelArg(this->opencl->kernel, 8, sizeof(int), &K);
+    err = clSetKernelArg(this->opencl->kernel, 0, sizeof(cl_mem), &device_y);
+    CHECK_ERR(err, "clSetKernelArg device_y");
 
-     // Compute output feature map dimensions
-    //int H_out = H - K + 1;
-    //int W_out = W - K + 1;
-   
-    // Define optimal work sizes
-    //size_t local_work_size[3] = {TILE_WIDTH, TILE_WIDTH, 1}; // Tunable values for optimal execution
+    err = clSetKernelArg(this->opencl->kernel, 1, sizeof(cl_mem), &device_x);
+    CHECK_ERR(err, "clSetKernelArg device_x");
 
-    size_t local_work_size[3] = {TILE_WIDTH, TILE_WIDTH, 1};
+    err = clSetKernelArg(this->opencl->kernel, 2, sizeof(cl_mem), &device_k);
+    CHECK_ERR(err, "clSetKernelArg device_k");
 
-    size_t global_work_size[3] = { 
-        (((W-K+1) + TILE_WIDTH - 1) / TILE_WIDTH) * TILE_WIDTH, 
-        (( (H-K+1) + TILE_WIDTH - 1) / TILE_WIDTH) * TILE_WIDTH,
-        M};
+    err = clSetKernelArg(this->opencl->kernel, 3, sizeof(int), &B);
+    CHECK_ERR(err, "clSetKernelArg B");
 
+    err = clSetKernelArg(this->opencl->kernel, 4, sizeof(int), &M);
+    CHECK_ERR(err, "clSetKernelArg M");
 
-    // Execute the kernel
-    clEnqueueNDRangeKernel(this->opencl->queue, this->opencl->kernel, 3, NULL, global_work_size, local_work_size, 0, NULL, NULL);
+    err = clSetKernelArg(this->opencl->kernel, 5, sizeof(int), &C);
+    CHECK_ERR(err, "clSetKernelArg C");
+
+    err = clSetKernelArg(this->opencl->kernel, 6, sizeof(int), &H);
+    CHECK_ERR(err, "clSetKernelArg H");
+
+    err = clSetKernelArg(this->opencl->kernel, 7, sizeof(int), &W);
+    CHECK_ERR(err, "clSetKernelArg W");
+
+    err = clSetKernelArg(this->opencl->kernel, 8, sizeof(int), &K);
+    CHECK_ERR(err, "clSetKernelArg K");
+
+    // Launch the OpenCL Kernel
+    err = clEnqueueNDRangeKernel(this->opencl->queue, this->opencl->kernel, 3, NULL, global_item_size, local_item_size, 0, NULL, NULL);
+    CHECK_ERR(err, "clEnqueueNDRangeKernel");
 }
 
 void OpenCLInterface::conv_forward_opencl_epilog(float *host_y, cl_mem device_y, cl_mem device_x, 
